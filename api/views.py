@@ -9,7 +9,7 @@ import pandas as pd
 import os 
 from openpyxl import load_workbook
 from core import settings
-
+from django.core.cache import cache
 class FileUploadView(APIView):
     parser_classes = [FileUploadParser]
     def post(self , request , *args , **kwargs ): 
@@ -73,15 +73,14 @@ class TagStatementView(APIView) :
         file_path = os.path.join(settings.BASE_DIR, "files" ,file_name )
         workbook = load_workbook(file_path)
         sheet_exists  = "tags" in workbook.sheetnames
+        df = pd.DataFrame(data_row, columns = headings_for_file)
         if sheet_exists :
-            print("in tags sheet")
-            df = pd.DataFrame(data_row, columns = headings_for_file)
+            # print("in tags sheet")
             writer =   pd.ExcelWriter(file_path,  engine = 'openpyxl' , mode = "a" , if_sheet_exists= "overlay")
             df.to_excel(writer ,sheet_name="tags",index = False ,  header= False ,startrow=len(pd.read_excel(file_path , "tags"))+1 )
             writer._save()
             return Response({"Success":"Tags added successfully"})
         else :
-            df = pd.DataFrame(data_row , columns = headings_for_file)
             print(file_path)
             with pd.ExcelWriter(file_path,engine="openpyxl" , mode = "a") as writer :
                 df.to_excel(writer , "tags" , index= False , header=True)
@@ -105,12 +104,15 @@ class DownloadTaggedFile(APIView ) :
 @api_view(["GET"])
 def get_all_aspects(request) :
     statement = request.GET.get("statement")
+    key = "".join(statement.split())
+    data = cache.get(key)
+    if data is not None :
+        return Response(data)
     queryset = Tag.objects.filter(statement = Statement.objects.get(text = statement))
     serializer = TagSerializer(queryset , many = True)
     data = serializer.data
+    cache.set(key , data , timeout = 3600)
     return Response(data)
-
-
 
 
 
