@@ -1,0 +1,5 @@
+Statement,Aspect,Sentiment
+The rooms were bad but staff was friendly.,room,NEG
+It is hot but scenery is good .,weather,NEG
+It is hot but scenery is good .,scenery,POS
+The rooms were bad but staff was friendly.,staff,POS

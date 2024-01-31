@@ -1,5 +1,5 @@
 from rest_framework.decorators import api_view
-from .serializers import TagSerializer
+from .serializers import TagSerializer , FileSerializer
 from rest_framework.parsers import FileUploadParser
 from django.http import FileResponse
 from rest_framework.response import Response
@@ -10,6 +10,7 @@ import os
 from openpyxl import load_workbook
 from core import settings
 from django.core.cache import cache
+
 class FileUploadView(APIView):
     parser_classes = [FileUploadParser]
     def post(self , request , *args , **kwargs ): 
@@ -19,20 +20,28 @@ class FileUploadView(APIView):
             file_format = is_file_xlsx(file.name)
             if file_format == "xlsx" : 
                 df = pd.read_excel(file,engine='openpyxl')
-                df.to_excel(destination_path , index = False )
-            elif file_format == "csv" :
-                df = pd.read_csv(file)
-                
-                # df.drop(df.index[[0,1,2]] ,inplace = True)
-                # df = df.drop(columns=[df.columns[0]])
                 print(df)
-                df.to_csv(destination_path)
+                df.to_excel(destination_path , index = False )
+                statements = df['Statement']
+            elif file_format == "csv" :
+
+                df = pd.read_csv(file , header= None ) 
+                # print(df)
+                df = df.iloc[3:-1]
+                statements = []
+
+                for i in range(len(df)) :
+                    original_string = df.iloc[i , 0]
+                    statements.append(original_string)
+                print(df)
+                df.to_csv(destination_path,index= False)
+
             else :
                 return Response({
                     "status" : "File upload failed check server logs"
                 })
 
-            statements = df['Statement']
+            
 
             for statement in statements:
                 s = Statement.objects.create(
@@ -45,6 +54,47 @@ class FileUploadView(APIView):
         return Response({
             "status" : "File upload failed check server logs"
         })
+
+class TagStatementCSView(APIView):
+    def post(self , request , *args ,**kwargs) :
+        data = request.data.get('data' , [])
+        file_name = request.data.get("filename")
+        serialized = TagSerializer(data = data , many =  True)
+        if serialized.is_valid() :
+            serialized_data = serialized.data 
+            data_row = []
+            for data in serialized_data :
+                temp = {
+                    "Statement" : data["statement"],
+                    "Aspect" : data["aspect"],
+                    "Sentiment" : data["sentiment"]
+                }
+                data_row.append(temp)
+                tag = Tag.objects.create(
+                    statement = Statement.objects.get(text = data["statement"]),
+                    aspect = data["aspect"],
+                    sentiment = data["sentiment"]
+                )
+                tag.save()
+        else :
+            return Response({
+                "Error":"Request format for data not valid"
+            })
+        df_to_append = pd.DataFrame(data_row)
+        csv_file_path = os.path.join(settings.BASE_DIR , "files" , f"new{file_name}")
+        if os.path.exists(csv_file_path):
+            existing_df = pd.read_csv(csv_file_path)
+            df_combined = pd.concat([existing_df, df_to_append], ignore_index=True)
+        else :
+            df_combined = df_to_append
+        df_combined.to_csv(csv_file_path, index=False)
+        return Response({
+            "File saved" : "Success"
+        })
+
+
+
+
 
 class TagStatementView(APIView) :
     def post(self , request ,*args , **kwargs) :
@@ -90,6 +140,8 @@ class TagStatementView(APIView) :
 class DownloadTaggedFile(APIView ) :
     def get(self , request , *args , **kwargs) :
         file_name = str(request.GET.get("file_name"))
+        if is_file_xlsx(file_name) == "csv":
+            file_name = f"new{file_name}"
         file_path = os.path.join(settings.BASE_DIR , "files" , file_name)
         if os.path.exists(file_path) :
             response = FileResponse(open(file_path, 'rb'))
