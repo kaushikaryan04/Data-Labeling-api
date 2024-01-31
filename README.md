@@ -67,6 +67,3 @@ Serializers
 All thought it is considered good practice to use serializers everywhere I used minimum serializers (Only one) as I wanted more control over everything and most of them would just be extra steps to achieve the same thing.  
 Cacheing   
 Most of this api is doing writting into file rather than sending results to the client. So not a lot of cacheing is used but I have used it in when the client wants to get all the aspects for a particular statement as the project stated to use cacheing.  
-
-## To Do remove this section when sharing project
-Have to make the csv file work
